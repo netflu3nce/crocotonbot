@@ -58,7 +58,7 @@ def setup_scheduler(bot):
                         f"👥 {winner['member_count']} warriors\n\n"
                         f"_New war begins now. Claim your territory._"
                     ),
-                    parse_mode="Markdown"
+                parse_mode="Markdown"
                 )
         except Exception as e:
             logger.error(f"Faction reset job error: {e}")
