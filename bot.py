@@ -24,11 +24,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Allowed in private DMs and groups
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🐊 Enter the Swamp", url=GROUP_LINK)]
     ])
-    
     caption = (
         f"*Welcome to CROCO, {update.effective_user.first_name}*\n"
         f"━━━━━━━━━━━━━\n"
@@ -38,7 +36,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Rank up. Claim territory. Go dark.\n\n"
         f"*CA:* `{CA_ADDRESS}`"
     )
-    
     try:
         from config import START_IMAGE
         await context.bot.send_photo(
@@ -52,7 +49,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_chat.send_message(caption, parse_mode="Markdown", reply_markup=keyboard)
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Admins bypass group checks so they can debug in private chats/DMs
     if update.effective_user.id not in ADMIN_IDS and update.effective_chat.id != GROUP_ID:
         return
     text = (
@@ -142,20 +138,22 @@ async def main_async():
     app.add_handler(CommandHandler("admin", admin))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member))
     
-    logger.info("🐊 CrocoBot starting native async webhooks lifecycle manager...")
+    logger.info("🐊 Starting python-telegram-bot internal webhook lifecycle...")
     
-    # Native Python 3.14 async event initialization pipeline loop
+    # Initialize application components
     await app.initialize()
+    
+    # Render binds incoming public traffic directly to the main variable port.
+    # We set listen to "0.0.0.0" and url_path to "" so that the root domain handles routing properly.
     await app.updater.start_webhook(
         listen="0.0.0.0",
-        port=PORT,
-        url_path="/webhook",
-        webhook_url=f"{WEBHOOK_URL}/webhook",
+        port=int(PORT),
+        url_path="",
+        webhook_url=f"{WEBHOOK_URL}/",
         drop_pending_updates=True,
     )
     await app.start()
     
-    # Infinite loop keeping the asyncio execution pipeline alive safely on Render
     try:
         while True:
             await asyncio.sleep(3600)
