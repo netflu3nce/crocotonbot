@@ -7,7 +7,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import BOT_TOKEN, WEBHOOK_URL, PORT, GROUP_ID, GROUP_LINK, CA_ADDRESS
+from config import BOT_TOKEN, WEBHOOK_URL, PORT, GROUP_ID, GROUP_LINK, CA_ADDRESS, ADMIN_IDS
 from db.database import init_db
 from scheduler import setup_scheduler, scheduler
 from handlers.hunt import hunt
@@ -24,9 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.type != "private":
-        return
-    
+    # Support starting the bot across groups and DMs natively
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🐊 Enter the Swamp", url=GROUP_LINK)]
     ])
@@ -54,7 +52,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_chat.send_message(caption, parse_mode="Markdown", reply_markup=keyboard)
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.id != GROUP_ID:
+    # Allow admins to access help anywhere, or restrict non-admins to the main group chat
+    if update.effective_user.id not in ADMIN_IDS and update.effective_chat.id != GROUP_ID:
         return
     text = (
         "🐊 *CROCO COMMANDS*\n"
@@ -95,7 +94,6 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def post_init(application: Application):
-    # Setup jobs inside the execution environment context loop safely
     setup_scheduler(application.bot)
     if not scheduler.running:
         scheduler.start()
@@ -113,13 +111,13 @@ async def post_init(application: Application):
         BotCommand("join", "Join a faction"),
         BotCommand("event", "Check active world event"),
         BotCommand("help", "All commands"),
+        BotCommand("admin", "Admin Controls"),
     ])
     logger.info("🐊 CrocoBot post init complete.")
 
-async def main_async():
+def main():
     init_db()
     
-    # Explicitly compile the base PTB Application stack
     app = (
         Application.builder()
         .token(BOT_TOKEN)
@@ -144,36 +142,16 @@ async def main_async():
     app.add_handler(CommandHandler("admin", admin))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member))
     
-    logger.info("🐊 CrocoBot starting native async webhooks lifecycle manager...")
+    logger.info("🐊 CrocoBot starting engine using standard webhook layer...")
     
-    # Setup manually engineered modern async initialization pipeline instead of run_webhook blocking wrappers
-    await app.initialize()
-    await app.updater.start_webhook(
+    # Standard, reliable PTB webhook listener execution pipeline
+    app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         url_path="/webhook",
         webhook_url=f"{WEBHOOK_URL}/webhook",
-        drop_pending_updates=True,
+        drop_pending_updates=True
     )
-    await app.start()
-    
-    # Infinite polling keep-alive keeping the asyncio execution pipeline loop alive safely on Render
-    try:
-        while True:
-            await asyncio.sleep(3600)
-    except (KeyboardInterrupt, SystemExit, asyncio.CancelledError):
-        logger.info("Stopping bot engine subsystems gracefully...")
-        if scheduler.running:
-            scheduler.shutdown()
-        await app.stop()
-        await app.updater.stop_webhook()
-        await app.shutdown()
-
-def main():
-    try:
-        asyncio.run(main_async())
-    except Exception as e:
-        logger.critical(f"Fatal Engine Panic crash: {e}", exc_info=True)
 
 if __name__ == "__main__":
     main()
