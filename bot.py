@@ -138,11 +138,13 @@ def main():
     # New member welcome
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member))
 
-    # Setup scheduler with bot reference
-    setup_scheduler(app.bot)
-
     # Set bot commands for Telegram menu
     async def post_init(application):
+        # Start scheduler inside event loop
+        setup_scheduler(application.bot)
+        from scheduler import scheduler
+        if not scheduler.running:
+            scheduler.start()
         await application.bot.set_my_commands([
             BotCommand("hunt", "Hunt every 8 hours"),
             BotCommand("profile", "View your croco profile"),
