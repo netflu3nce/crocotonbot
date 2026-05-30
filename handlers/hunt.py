@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from config import (
-    GROUP_ID, HUNT_COOLDOWN, HUNT_OUTCOMES,
+    GROUP_ID, ADMIN_IDS, HUNT_COOLDOWN, HUNT_OUTCOMES,
     XP_HUNT_SUCCESS, XP_HUNT_RARE, XP_HUNT_JACKPOT, XP_HUNT_FAIL,
     XP_STREAK_BONUS, EGG_HUNT_BONUS,
 )
@@ -63,20 +63,24 @@ MUTATION_MESSAGES = [
 ]
 
 async def hunt(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.id != GROUP_ID:
-        await update.message.reply_text("🐊 Hunt commands only work in the Croco community group!")
-        return
-
     user = update.effective_user
     user_id = user.id
     username = user.username or user.first_name
+    
+    # Check if this user is a designated administrator
+    is_admin = user_id in ADMIN_IDS
+
+    # ── Scope Check (Admins can hunt anywhere, including private DMs) ──────
+    if not is_admin and update.effective_chat.id != GROUP_ID:
+        await update.message.reply_text("🐊 Hunt commands only work in the Croco community group!")
+        return
 
     ensure_user(user_id, username)
     db_user = get_user(user_id)
     now = datetime.now().timestamp()
 
-    # ── Exile check ────────────────────────────────────────────────────────
-    if db_user["exile_until"] and now < db_user["exile_until"]:
+    # ── Exile check (Admins bypass) ────────────────────────────────────────
+    if not is_admin and db_user["exile_until"] and now < db_user["exile_until"]:
         remaining = int((db_user["exile_until"] - now) / 60)
         await send_sticker(context.bot, GROUP_ID, "nervous")
         await update.message.reply_text(
@@ -86,9 +90,9 @@ async def hunt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # ── Cooldown check ─────────────────────────────────────────────────────
+    # ── Cooldown check (Admins bypass) ─────────────────────────────────────
     cooldown_expires = get_cooldown(user_id, "hunt")
-    if cooldown_expires and now < cooldown_expires:
+    if not is_admin and cooldown_expires and now < cooldown_expires:
         remaining = int(cooldown_expires - now)
         hours = remaining // 3600
         minutes = (remaining % 3600) // 60
@@ -99,6 +103,9 @@ async def hunt(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
         return
+
+    # Determine standard target execution room ID for stickers & notifications
+    target_chat_id = update.effective_chat.id
 
     # ── Active event multiplier ────────────────────────────────────────────
     event = get_active_event()
@@ -130,7 +137,7 @@ async def hunt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         base_xp = XP_HUNT_SUCCESS + streak_bonus
         result = award_xp(user_id, base_xp, xp_multiplier)
         msg_text = random.choice(SUCCESS_MESSAGES)
-        await send_sticker(context.bot, GROUP_ID, "thumbs_up")
+        await send_sticker(context.bot, target_chat_id, "thumbs_up")
 
     elif outcome == "rare_prey":
         base_xp = XP_HUNT_RARE + streak_bonus
@@ -140,7 +147,7 @@ async def hunt(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{random.choice(RARE_MESSAGES)}\n\n"
             f"🎁 *Found:* {RARITY_EMOJI.get(rarity, '⬜')} {item_name} _{rarity}_"
         )
-        await send_sticker(context.bot, GROUP_ID, "rainbow")
+        await send_sticker(context.bot, target_chat_id, "rainbow")
 
     elif outcome == "jackpot":
         base_xp = XP_HUNT_JACKPOT + streak_bonus
@@ -150,12 +157,12 @@ async def hunt(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{random.choice(JACKPOT_MESSAGES)}\n\n"
             f"🏆 *Loot:* {RARITY_EMOJI.get(rarity, '⬜')} {item_name} _{rarity}_"
         )
-        await send_sticker(context.bot, GROUP_ID, "premium_flex")
+        await send_sticker(context.bot, target_chat_id, "premium_flex")
 
     elif outcome == "fail":
         result = award_xp(user_id, XP_HUNT_FAIL, xp_multiplier)
         msg_text = random.choice(FAIL_MESSAGES)
-        await send_sticker(context.bot, GROUP_ID, "sad")
+        await send_sticker(context.bot, target_chat_id, "sad")
 
     elif outcome == "ambushed":
         result = award_xp(user_id, 5, 1.0)
@@ -171,19 +178,18 @@ async def hunt(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{random.choice(AMBUSHED_MESSAGES)}"
             + (f"\n💸 Lost: *{lost}*" if lost else "")
         )
-        await send_sticker(context.bot, GROUP_ID, "shocked")
+        await send_sticker(context.bot, target_chat_id, "shocked")
 
     elif outcome == "mutation":
         base_xp = int(XP_HUNT_SUCCESS * 1.4) + streak_bonus
         result = award_xp(user_id, base_xp, xp_multiplier)
-        # Random bonus
         mutation_effect = random.choice([
             "Hunt streak doubled ×2 bonus next hunt.",
             "XP aura activated — nearby allies gain 10 XP.",
             "A faint glow surrounds you. Something shifted.",
         ])
         msg_text = f"{random.choice(MUTATION_MESSAGES)}\n\n✨ _{mutation_effect}_"
-        await send_sticker(context.bot, GROUP_ID, "hyper_coffee")
+        await send_sticker(context.bot, target_chat_id, "hyper_coffee")
 
     elif outcome == "hidden_item":
         result = award_xp(user_id, XP_HUNT_SUCCESS, xp_multiplier)
@@ -192,78 +198,80 @@ async def hunt(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🕳️ @{username} discovered something hidden in the swamp...\n\n"
             f"{RARITY_EMOJI.get(rarity, '⬜')} *{item_name}* _{rarity}_ — taken quietly."
         )
-        await send_sticker(context.bot, GROUP_ID, "mask_hoodie")
+        await send_sticker(context.bot, target_chat_id, "mask_hoodie")
     else:
         result = {"xp_gained": 0, "new_xp": db_user["xp"], "ranked_up": False}
         msg_text = "The swamp was still."
 
-    # ── Update DB ──────────────────────────────────────────────────────────
-    update_user(user_id,
-                hunt_streak=streak,
-                last_hunt=now,
-                last_active=now)
-    reset_hunger(user_id)
-    set_cooldown(user_id, "hunt", HUNT_COOLDOWN)
+    # ── Update DB (Only run for regular players, skip updates for unrestricted admins) ──
+    if not is_admin:
+        update_user(user_id,
+                    hunt_streak=streak,
+                    last_hunt=now,
+                    last_active=now)
+        reset_hunger(user_id)
+        set_cooldown(user_id, "hunt", HUNT_COOLDOWN)
 
-    # ── Corruption tick (Predator+) ────────────────────────────────────────
-    new_corruption = tick_corruption(user_id)
-    collapse = check_collapse(user_id)
+    # ── Corruption tick (Admins bypass) ────────────────────────────────────
+    collapse_note = ""
+    if not is_admin:
+        new_corruption = tick_corruption(user_id)
+        collapse = check_collapse(user_id)
+        if collapse.get("collapsed"):
+            await send_sticker(context.bot, target_chat_id, "angry_god")
+            collapse_note = (
+                f"\n\n🌑 *CORRUPTION COLLAPSE*\n"
+                f"━━━━━━━━━━\n"
+                f"The corruption consumed you.\n"
+                f"💀 Lost {collapse['xp_loss']} XP\n"
+                + (f"💸 Lost item: *{collapse['lost_item']}*\n" if collapse["lost_item"] else "")
+                + f"🔴 Exiled for *2 hours*"
+            )
 
-    # ── Egg progress ───────────────────────────────────────────────────────
-    egg_result = progress_egg(user_id, EGG_HUNT_BONUS)
+    # ── Egg progress (Admins bypass) ───────────────────────────────────────
     egg_note = ""
-    if egg_result.get("hatched"):
-        emoji = COMPANION_EMOJI.get(egg_result["variant"], "🐊")
-        egg_note = (
-            f"\n\n🥚💥 *EGG HATCHED!*\n"
-            f"{emoji} *{egg_result['companion_name']}* _{egg_result['variant']}_ joined you!"
-        )
-        await send_sticker(context.bot, GROUP_ID, "premium_love")
-    elif egg_result.get("has_egg"):
-        p = egg_result["progress"]
-        m = egg_result["max"]
-        egg_note = f"\n🥚 Egg progress: {p}/{m}"
+    if not is_admin:
+        egg_result = progress_egg(user_id, EGG_HUNT_BONUS)
+        if egg_result.get("hatched"):
+            emoji = COMPANION_EMOJI.get(egg_result["variant"], "🐊")
+            egg_note = (
+                f"\n\n🥚💥 *EGG HATCHED!*\n"
+                f"{emoji} *{egg_result['companion_name']}* _{egg_result['variant']}_ joined you!"
+            )
+            await send_sticker(context.bot, target_chat_id, "premium_love")
+        elif egg_result.get("has_egg"):
+            p = egg_result["progress"]
+            m = egg_result["max"]
+            egg_note = f"\n🥚 Egg progress: {p}/{m}"
 
-    # ── Try egg drop ───────────────────────────────────────────────────────
-    if not egg_result.get("has_egg") and try_drop_egg(user_id):
-        egg_note = "\n\n🥚 *You found a mysterious egg in the swamp.* It pulses faintly."
-        await send_sticker(context.bot, GROUP_ID, "shocked")
+        # Try egg drop
+        if not egg_result.get("has_egg") and try_drop_egg(user_id):
+            egg_note = "\n\n🥚 *You found a mysterious egg in the swamp.* It pulses faintly."
+            await send_sticker(context.bot, target_chat_id, "shocked")
 
-    # ── Streak note ────────────────────────────────────────────────────────
+    # ── Formatting Metadata notes ──────────────────────────────────────────
     streak_note = ""
-    if streak >= 3:
+    if not is_admin and streak >= 3:
         streak_note = f"\n🔥 *Streak:* {streak} days — +{streak_bonus} bonus XP"
 
-    # ── Hunger note ───────────────────────────────────────────────────────
     hunger_note = ""
-    if result.get("hunger_penalty"):
+    if not is_admin and result.get("hunger_penalty"):
         hunger_note = f"\n⚠️ _Hunger reduced your XP gains_"
 
-    # ── Rank up ────────────────────────────────────────────────────────────
     rank_note = ""
     if result.get("ranked_up"):
         rank_note = f"\n\n🎉 *RANK UP!*\n{result['old_rank']} → {result['new_rank']}"
-        await send_sticker(context.bot, GROUP_ID, "premium_flex")
+        await send_sticker(context.bot, target_chat_id, "premium_flex")
 
-    # ── Collapse message ───────────────────────────────────────────────────
-    collapse_note = ""
-    if collapse.get("collapsed"):
-        await send_sticker(context.bot, GROUP_ID, "angry_god")
-        collapse_note = (
-            f"\n\n🌑 *CORRUPTION COLLAPSE*\n"
-            f"━━━━━━━━━━\n"
-            f"The corruption consumed you.\n"
-            f"💀 Lost {collapse['xp_loss']} XP\n"
-            + (f"💸 Lost item: *{collapse['lost_item']}*\n" if collapse["lost_item"] else "")
-            + f"🔴 Exiled for *2 hours*"
-        )
+    admin_badge = "🛠 *[SWAMP ADMIN]*\n" if is_admin else ""
 
-    # ── Final message ──────────────────────────────────────────────────────
+    # ── Final Message Assembly ─────────────────────────────────────────────
     xp_display = result.get("xp_gained", 0)
     new_xp = result.get("new_xp", db_user["xp"])
     final = (
         f"🐊 *@{username}*\n"
         f"━━━━━━━━━━\n"
+        f"{admin_badge}"
         f"{msg_text}\n\n"
         f"⚡ *+{xp_display} XP* | Total: *{new_xp:,}*\n"
         f"🏅 *{result.get('new_rank', db_user['rank'])}*"
