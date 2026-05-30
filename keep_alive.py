@@ -1,7 +1,4 @@
-# UptimeRobot health check is handled by the webhook server itself.
-# PTB's run_webhook serves on PORT and responds to all paths.
-# Point UptimeRobot to: https://your-render-url.onrender.com/
-# It will get a 200 OK from the webhook server.
-
+# PTB webhook server handles port binding natively and keeps the process alive on its own.
+# UptimeRobot should ping your main webhook URL endpoint directly: https://your-render-url.onrender.com/webhook
 def keep_alive():
-    pass  # No-op — PTB webhook server keeps the process alive
+    pass  # No-op placeholder to preserve codebase internal architecture map imports
