@@ -12,7 +12,7 @@ CA_ADDRESS = "EQB-i1kqPz_MitkRCOzzgDf0_doxahk1bUPVAGjm49zMozOd"
 START_IMAGE = "https://i.ibb.co/35V7TDLW/IMG-9243.jpg"
 
 # ── Admin IDs (add your Telegram user ID here) ────────────────────────────────
-ADMIN_IDS = [7608551523]  # Majek's ID — add more as needed
+ADMIN_IDS = [7608551523 , 544346155]  # Majek's ID & Founder's ID — add more as needed
 
 # ── Cooldowns (seconds) ───────────────────────────────────────────────────────
 HUNT_COOLDOWN = 8 * 3600       # 8 hours
