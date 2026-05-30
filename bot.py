@@ -2,11 +2,10 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import logging
 import asyncio
+import logging
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup,
-    BotCommand
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 )
 from telegram.ext import (
     Application, CommandHandler, ContextTypes,
@@ -15,14 +14,12 @@ from telegram.ext import (
 
 from config import BOT_TOKEN, WEBHOOK_URL, PORT, GROUP_ID, GROUP_LINK, CA_ADDRESS, START_IMAGE
 from db.database import init_db
-from keep_alive import keep_alive
-from scheduler import setup_scheduler
+from scheduler import setup_scheduler, scheduler
 
-# ── Handlers ──────────────────────────────────────────────────────────────────
 from handlers.hunt import hunt
 from handlers.profile import profile, inventory_cmd, leaderboard, factions_cmd
 from handlers.social import ambush, protect, revenge, gift, join
-from handlers.events import check_event, admin_event
+from handlers.events import check_event
 from handlers.admin import admin
 from systems.stickers import send_sticker
 
@@ -32,20 +29,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ── /start (DM only) ──────────────────────────────────────────────────────────
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_type = update.effective_chat.type
+    if update.effective_chat.type != "private":
+        return
     user = update.effective_user
-
-    if chat_type != "private":
-        return  # Only respond to DMs
-
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🐊 Enter the Swamp", url=GROUP_LINK)]
     ])
-
     caption = (
-        f"🐊 *Welcome to CROCO, @{user.first_name}*\n"
+        f"🐊 *Welcome to CROCO, {user.first_name}*\n"
         f"━━━━━━━━━━━━━━━\n"
         f"The swamp doesn't sleep.\n\n"
         f"Hunt. Dominate. Survive.\n\n"
@@ -53,7 +46,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👑 Rank up. Claim territory. Go dark.\n\n"
         f"📋 *CA:* `{CA_ADDRESS}`"
     )
-
     try:
         await context.bot.send_photo(
             chat_id=update.effective_chat.id,
@@ -65,7 +57,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text(caption, parse_mode="Markdown", reply_markup=keyboard)
 
-# ── /help ─────────────────────────────────────────────────────────────────────
+
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != GROUP_ID:
         return
@@ -91,7 +83,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
-# ── New member greeting ───────────────────────────────────────────────────────
+
 async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != GROUP_ID:
         return
@@ -100,7 +92,7 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
             continue
         await send_sticker(context.bot, GROUP_ID, "hi")
         await update.message.reply_text(
-            f"🐊 *@{member.username or member.first_name}* enters the swamp.\n\n"
+            f"🐊 *{member.first_name}* enters the swamp.\n\n"
             f"The reeds part. Eyes watch from the murk.\n"
             f"Start with /hunt to mark your territory.\n"
             f"Pick your side with /join <faction>.\n\n"
@@ -108,18 +100,38 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+
+async def post_init(application: Application):
+    setup_scheduler(application.bot)
+    if not scheduler.running:
+        scheduler.start()
+    await application.bot.set_my_commands([
+        BotCommand("hunt", "Hunt every 8 hours"),
+        BotCommand("profile", "View your croco profile"),
+        BotCommand("inventory", "Check your items"),
+        BotCommand("leaderboard", "Top 10 crocos"),
+        BotCommand("factions", "Faction standings"),
+        BotCommand("ambush", "Ambush another croco"),
+        BotCommand("protect", "Activate swamp shield"),
+        BotCommand("revenge", "Take revenge on attacker"),
+        BotCommand("gift", "Gift an item to ally"),
+        BotCommand("join", "Join a faction"),
+        BotCommand("event", "Check active world event"),
+        BotCommand("help", "All commands"),
+    ])
+    logger.info("🐊 CrocoBot post_init complete.")
+
+
 def main():
-    # Init DB
     init_db()
 
-    # Keep alive (UptimeRobot compatible)
-    keep_alive()
+    app = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .post_init(post_init)
+        .build()
+    )
 
-    # Build application
-    app = Application.builder().token(BOT_TOKEN).build()
-
-    # Register commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("hunt", hunt))
@@ -134,33 +146,7 @@ def main():
     app.add_handler(CommandHandler("join", join))
     app.add_handler(CommandHandler("event", check_event))
     app.add_handler(CommandHandler("admin", admin))
-
-    # New member welcome
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member))
-
-    # Set bot commands for Telegram menu
-    async def post_init(application):
-        # Start scheduler inside event loop
-        setup_scheduler(application.bot)
-        from scheduler import scheduler
-        if not scheduler.running:
-            scheduler.start()
-        await application.bot.set_my_commands([
-            BotCommand("hunt", "Hunt every 8 hours"),
-            BotCommand("profile", "View your croco profile"),
-            BotCommand("inventory", "Check your items"),
-            BotCommand("leaderboard", "Top 10 crocos"),
-            BotCommand("factions", "Faction standings"),
-            BotCommand("ambush", "Ambush another croco"),
-            BotCommand("protect", "Activate swamp shield"),
-            BotCommand("revenge", "Take revenge on attacker"),
-            BotCommand("gift", "Gift an item to ally"),
-            BotCommand("join", "Join a faction"),
-            BotCommand("event", "Check active world event"),
-            BotCommand("help", "All commands"),
-        ])
-
-    app.post_init = post_init
 
     logger.info("🐊 CrocoBot starting with webhook...")
 
@@ -171,6 +157,7 @@ def main():
         url_path="/webhook",
         drop_pending_updates=True,
     )
+
 
 if __name__ == "__main__":
     main()
