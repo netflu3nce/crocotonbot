@@ -90,5 +90,4 @@ def setup_scheduler(bot):
         id="daily_nudge"
     )
 
-    scheduler.start()
-    logger.info("Scheduler started.")
+    logger.info("Scheduler jobs registered.")
