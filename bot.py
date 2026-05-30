@@ -24,7 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Support starting the bot across groups and DMs natively
+    # Allowed in private DMs and groups
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🐊 Enter the Swamp", url=GROUP_LINK)]
     ])
@@ -52,7 +52,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_chat.send_message(caption, parse_mode="Markdown", reply_markup=keyboard)
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Allow admins to access help anywhere, or restrict non-admins to the main group chat
+    # Admins bypass group checks so they can debug in private chats/DMs
     if update.effective_user.id not in ADMIN_IDS and update.effective_chat.id != GROUP_ID:
         return
     text = (
@@ -111,11 +111,11 @@ async def post_init(application: Application):
         BotCommand("join", "Join a faction"),
         BotCommand("event", "Check active world event"),
         BotCommand("help", "All commands"),
-        BotCommand("admin", "Admin Controls"),
+        BotCommand("admin", "Admin Terminal"),
     ])
     logger.info("🐊 CrocoBot post init complete.")
 
-def main():
+async def main_async():
     init_db()
     
     app = (
@@ -142,16 +142,36 @@ def main():
     app.add_handler(CommandHandler("admin", admin))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member))
     
-    logger.info("🐊 CrocoBot starting engine using standard webhook layer...")
+    logger.info("🐊 CrocoBot starting native async webhooks lifecycle manager...")
     
-    # Standard, reliable PTB webhook listener execution pipeline
-    app.run_webhook(
+    # Native Python 3.14 async event initialization pipeline loop
+    await app.initialize()
+    await app.updater.start_webhook(
         listen="0.0.0.0",
         port=PORT,
         url_path="/webhook",
         webhook_url=f"{WEBHOOK_URL}/webhook",
-        drop_pending_updates=True
+        drop_pending_updates=True,
     )
+    await app.start()
+    
+    # Infinite loop keeping the asyncio execution pipeline alive safely on Render
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    except (KeyboardInterrupt, SystemExit, asyncio.CancelledError):
+        logger.info("Stopping bot engine subsystems gracefully...")
+        if scheduler.running:
+            scheduler.shutdown()
+        await app.stop()
+        await app.updater.stop_webhook()
+        await app.shutdown()
+
+def main():
+    try:
+        asyncio.run(main_async())
+    except Exception as e:
+        logger.critical(f"Fatal Engine Panic crash: {e}", exc_info=True)
 
 if __name__ == "__main__":
     main()
