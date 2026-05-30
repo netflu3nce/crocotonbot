@@ -1,21 +1,15 @@
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 import asyncio
 import logging
-from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
-)
-from telegram.ext import (
-    Application, CommandHandler, ContextTypes,
-    MessageHandler, filters
-)
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
-from config import BOT_TOKEN, WEBHOOK_URL, PORT, GROUP_ID, GROUP_LINK, CA_ADDRESS, START_IMAGE
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from config import BOT_TOKEN, WEBHOOK_URL, PORT, GROUP_ID, GROUP_LINK, CA_ADDRESS
 from db.database import init_db
 from scheduler import setup_scheduler, scheduler
-
 from handlers.hunt import hunt
 from handlers.profile import profile, inventory_cmd, leaderboard, factions_cmd
 from handlers.social import ambush, protect, revenge, gift, join
@@ -29,24 +23,26 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
-    user = update.effective_user
+    
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🐊 Enter the Swamp", url=GROUP_LINK)]
     ])
+    
     caption = (
-        f"🐊 *Welcome to CROCO, {user.first_name}*\n"
-        f"━━━━━━━━━━━━━━━\n"
+        f"*Welcome to CROCO, {update.effective_user.first_name}*\n"
+        f"━━━━━━━━━━━━━\n"
         f"The swamp doesn't sleep.\n\n"
         f"Hunt. Dominate. Survive.\n\n"
-        f"🌿 Join the community. Build your legend.\n"
-        f"👑 Rank up. Claim territory. Go dark.\n\n"
-        f"📋 *CA:* `{CA_ADDRESS}`"
+        f"Join the community. Build your legend.\n"
+        f"Rank up. Claim territory. Go dark.\n\n"
+        f"*CA:* `{CA_ADDRESS}`"
     )
+    
     try:
+        from config import START_IMAGE
         await context.bot.send_photo(
             chat_id=update.effective_chat.id,
             photo=START_IMAGE,
@@ -55,8 +51,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=keyboard
         )
     except Exception:
-        await update.message.reply_text(caption, parse_mode="Markdown", reply_markup=keyboard)
-
+        await update.effective_chat.send_message(caption, parse_mode="Markdown", reply_markup=keyboard)
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != GROUP_ID:
@@ -64,25 +59,24 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "🐊 *CROCO COMMANDS*\n"
         "━━━━━━━━━━━━━\n"
-        "⚔️ *Survival*\n"
+        "*Survival*\n"
         "/hunt — Hunt every 8 hours\n"
         "/profile — View your stats\n"
         "/inventory — Check your items\n\n"
-        "🌿 *Social*\n"
+        "*Social*\n"
         "/ambush @user — Strike from shadows (12h CD)\n"
         "/protect — Shield yourself 5 hours (24h CD)\n"
         "/revenge — Strike back after ambush\n"
         "/gift @user item — Give an item\n\n"
-        "🌍 *Territory*\n"
+        "*Territory*\n"
         "/join <faction> — Join a faction\n"
         "/factions — Faction leaderboard\n\n"
-        "📊 *Stats*\n"
+        "*Stats*\n"
         "/leaderboard — Top 10 crocos\n"
         "/event — Check active world event\n\n"
-        f"📋 CA: `{CA_ADDRESS}`"
+        f"CA: `{CA_ADDRESS}`"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
-
 
 async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != GROUP_ID:
@@ -92,19 +86,20 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
             continue
         await send_sticker(context.bot, GROUP_ID, "hi")
         await update.message.reply_text(
-            f"🐊 *{member.first_name}* enters the swamp.\n\n"
+            f"🐊 {member.first_name} enters the swamp.\n\n"
             f"The reeds part. Eyes watch from the murk.\n"
             f"Start with /hunt to mark your territory.\n"
             f"Pick your side with /join <faction>.\n\n"
-            f"_Welcome to the dark._",
+            f"Welcome to the dark. 🖤",
             parse_mode="Markdown"
         )
 
-
 async def post_init(application: Application):
+    # Setup jobs inside the execution environment context loop safely
     setup_scheduler(application.bot)
     if not scheduler.running:
         scheduler.start()
+        
     await application.bot.set_my_commands([
         BotCommand("hunt", "Hunt every 8 hours"),
         BotCommand("profile", "View your croco profile"),
@@ -119,19 +114,20 @@ async def post_init(application: Application):
         BotCommand("event", "Check active world event"),
         BotCommand("help", "All commands"),
     ])
-    logger.info("🐊 CrocoBot post_init complete.")
+    logger.info("🐊 CrocoBot post init complete.")
 
-
-def main():
+async def main_async():
     init_db()
-
+    
+    # Explicitly compile the base PTB Application stack
     app = (
         Application.builder()
         .token(BOT_TOKEN)
         .post_init(post_init)
         .build()
     )
-
+    
+    # Handlers Registration
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("hunt", hunt))
@@ -147,17 +143,37 @@ def main():
     app.add_handler(CommandHandler("event", check_event))
     app.add_handler(CommandHandler("admin", admin))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member))
-
-    logger.info("🐊 CrocoBot starting with webhook...")
-
-    app.run_webhook(
+    
+    logger.info("🐊 CrocoBot starting native async webhooks lifecycle manager...")
+    
+    # Setup manually engineered modern async initialization pipeline instead of run_webhook blocking wrappers
+    await app.initialize()
+    await app.updater.start_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_url=f"{WEBHOOK_URL}/webhook",
         url_path="/webhook",
+        webhook_url=f"{WEBHOOK_URL}/webhook",
         drop_pending_updates=True,
     )
+    await app.start()
+    
+    # Infinite polling keep-alive keeping the asyncio execution pipeline loop alive safely on Render
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    except (KeyboardInterrupt, SystemExit, asyncio.CancelledError):
+        logger.info("Stopping bot engine subsystems gracefully...")
+        if scheduler.running:
+            scheduler.shutdown()
+        await app.stop()
+        await app.updater.stop_webhook()
+        await app.shutdown()
 
+def main():
+    try:
+        asyncio.run(main_async())
+    except Exception as e:
+        logger.critical(f"Fatal Engine Panic crash: {e}", exc_info=True)
 
 if __name__ == "__main__":
     main()
