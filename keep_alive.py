@@ -1,20 +1,7 @@
-from flask import Flask
-from threading import Thread
-
-app = Flask(__name__)
-
-@app.route("/")
-def home():
-    return "🐊 Croco Bot is alive in the swamp."
-
-@app.route("/health")
-def health():
-    return {"status": "alive", "bot": "CrocoBot"}, 200
-
-def run():
-    app.run(host="0.0.0.0", port=8080)
+# UptimeRobot health check is handled by the webhook server itself.
+# PTB's run_webhook serves on PORT and responds to all paths.
+# Point UptimeRobot to: https://your-render-url.onrender.com/
+# It will get a 200 OK from the webhook server.
 
 def keep_alive():
-    t = Thread(target=run)
-    t.daemon = True
-    t.start()
+    pass  # No-op — PTB webhook server keeps the process alive
