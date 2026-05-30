@@ -12,6 +12,7 @@ from systems.stickers import send_sticker
 
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    # Ensure any admin configured inside config.ADMIN_IDS is allowed entry
     if user.id not in ADMIN_IDS:
         return  # Silent ignore
 
@@ -35,12 +36,19 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if subcmd == "stats":
         stats = get_ecosystem_stats()
         top = stats["top_user"]
+        
+        # Guard against key formatting variations in user structures
+        username_text = "No users yet."
+        if top:
+            username = top.get('username') or f"Croco#{top.get('user_id', '?')}"
+            username_text = f"👑 Top Croco: @{username} ({top['xp']:,} XP)"
+            
         await update.message.reply_text(
             f"📊 *Ecosystem Stats*\n"
             f"━━━━━━━━━━━━\n"
             f"👥 Total Crocos: {stats['total_users']}\n"
             f"🔥 Active Today: {stats['active_today']}\n"
-            f"👑 Top Croco: @{top['username']} ({top['xp']:,} XP)" if top else "No users yet.",
+            f"{username_text}",
             parse_mode="Markdown"
         )
 
