@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: croco-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    healthCheckPath: /health
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: WEBHOOK_URL
+        sync: false
+      - key: PORT
+        value: "8080"
+      - key: DB_PATH
+        value: "/data/croco.db"
+    disk:
+      name: croco-data
+      mountPath: /data
+      sizeGB: 1
