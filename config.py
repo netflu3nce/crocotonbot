@@ -169,4 +169,3 @@ HUNT_OUTCOMES = {
 CORRUPTION_GAIN_PER_HUNT = 0.5   # % per hunt above Predator rank
 CORRUPTION_COLLAPSE_THRESHOLD = 80
 CORRUPTION_COLLAPSE_CHANCE = 0.10  # 10% chance per hunt above 80%
-o
