@@ -70,10 +70,9 @@ async def hunt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check if this user is a designated administrator
     is_admin = user_id in ADMIN_IDS
 
-    # ── Scope Check (Admins can hunt anywhere, including private DMs) ──────
-    if not is_admin and update.effective_chat.id != GROUP_ID:
-        await update.message.reply_text("🐊 Hunt commands only work in the Croco community group!")
-        return
+    # ── Scope Check (Group only — applies to all users including admins) ──────
+    if update.effective_chat.id != GROUP_ID:
+        return  # Silent — DMs and other chats are ignored
 
     ensure_user(user_id, username)
     db_user = get_user(user_id)
