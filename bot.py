@@ -4,6 +4,7 @@ import asyncio
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+import tornado.web
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -25,11 +26,11 @@ logger = logging.getLogger(__name__)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🐊 Enter the Swamp", url=GROUP_LINK)]
+        [InlineKeyboardButton("ð Enter the Swamp", url=GROUP_LINK)]
     ])
     caption = (
         f"*Welcome to CROCO, {update.effective_user.first_name}*\n"
-        f"━━━━━━━━━━━━━\n"
+        f"âââââââââââââ\n"
         f"The swamp doesn't sleep.\n\n"
         f"Hunt. Dominate. Survive.\n\n"
         f"Join the community. Build your legend.\n"
@@ -49,26 +50,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_chat.send_message(caption, parse_mode="Markdown", reply_markup=keyboard)
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_IDS and update.effective_chat.id != GROUP_ID:
+    if update.effective_chat.id != GROUP_ID:
         return
     text = (
-        "🐊 *CROCO COMMANDS*\n"
-        "━━━━━━━━━━━━━\n"
+        "ð *CROCO COMMANDS*\n"
+        "âââââââââââââ\n"
         "*Survival*\n"
-        "/hunt — Hunt every 8 hours\n"
-        "/profile — View your stats\n"
-        "/inventory — Check your items\n\n"
+        "/hunt â Hunt every 8 hours\n"
+        "/profile â View your stats\n"
+        "/inventory â Check your items\n\n"
         "*Social*\n"
-        "/ambush @user — Strike from shadows (12h CD)\n"
-        "/protect — Shield yourself 5 hours (24h CD)\n"
-        "/revenge — Strike back after ambush\n"
-        "/gift @user item — Give an item\n\n"
+        "/ambush @user â Strike from shadows (12h CD)\n"
+        "/protect â Shield yourself 5 hours (24h CD)\n"
+        "/revenge â Strike back after ambush\n"
+        "/gift @user item â Give an item\n\n"
         "*Territory*\n"
-        "/join <faction> — Join a faction\n"
-        "/factions — Faction leaderboard\n\n"
+        "/join <faction> â Join a faction\n"
+        "/factions â Faction leaderboard\n\n"
         "*Stats*\n"
-        "/leaderboard — Top 10 crocos\n"
-        "/event — Check active world event\n\n"
+        "/leaderboard â Top 10 crocos\n"
+        "/event â Check active world event\n\n"
         f"CA: `{CA_ADDRESS}`"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
@@ -81,11 +82,11 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
             continue
         await send_sticker(context.bot, GROUP_ID, "hi")
         await update.message.reply_text(
-            f"🐊 {member.first_name} enters the swamp.\n\n"
+            f"ð {member.first_name} enters the swamp.\n\n"
             f"The reeds part. Eyes watch from the murk.\n"
             f"Start with /hunt to mark your territory.\n"
             f"Pick your side with /join <faction>.\n\n"
-            f"Welcome to the dark. 🖤",
+            f"Welcome to the dark. ð¤",
             parse_mode="Markdown"
         )
 
@@ -109,7 +110,13 @@ async def post_init(application: Application):
         BotCommand("help", "All commands"),
         BotCommand("admin", "Admin Terminal"),
     ])
-    logger.info("🐊 CrocoBot post init complete.")
+    logger.info("ð CrocoBot post init complete.")
+
+class HealthHandler(tornado.web.RequestHandler):
+    """GET /health â 200 OK â satisfies Render's health check on the same PORT."""
+    def get(self):
+        self.set_status(200)
+        self.write("OK")
 
 async def main_async():
     init_db()
@@ -138,20 +145,26 @@ async def main_async():
     app.add_handler(CommandHandler("admin", admin))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member))
     
-    logger.info("🐊 Starting python-telegram-bot internal webhook lifecycle...")
+    logger.info("ð Starting python-telegram-bot internal webhook lifecycle...")
     
     # Initialize application components
     await app.initialize()
     
-    # Render binds incoming public traffic directly to the main variable port.
-    # We set listen to "0.0.0.0" and url_path to "" so that the root domain handles routing properly.
+    # url_path must be non-empty so the root GET "/" is free for the health check.
+    # Render pings healthCheckPath=/health (GET), webhook receives POST at /webhook.
     await app.updater.start_webhook(
         listen="0.0.0.0",
         port=int(PORT),
-        url_path="",
-        webhook_url=f"{WEBHOOK_URL}/",
+        url_path="webhook",
+        webhook_url=f"{WEBHOOK_URL}/webhook",
         drop_pending_updates=True,
     )
+
+    # Register /health on the same Tornado server PTB started.
+    # Render's health check hits GET /health on PORT â this satisfies it.
+    app.updater.httpd.add_handlers(".*", [(r"/health", HealthHandler)])
+    logger.info("ð /health route registered on Tornado server.")
+
     await app.start()
     
     try:
