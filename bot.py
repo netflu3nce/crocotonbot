@@ -26,11 +26,11 @@ logger = logging.getLogger(__name__)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("ð Enter the Swamp", url=GROUP_LINK)]
+        [InlineKeyboardButton("🐊 Enter the Swamp", url=GROUP_LINK)]
     ])
     caption = (
         f"*Welcome to CROCO, {update.effective_user.first_name}*\n"
-        f"âââââââââââââ\n"
+        f"━━━━━━━━━━━━━\n"
         f"The swamp doesn't sleep.\n\n"
         f"Hunt. Dominate. Survive.\n\n"
         f"Join the community. Build your legend.\n"
@@ -53,23 +53,23 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != GROUP_ID:
         return
     text = (
-        "ð *CROCO COMMANDS*\n"
-        "âââââââââââââ\n"
+        "🐊 *CROCO COMMANDS*\n"
+        "━━━━━━━━━━━━━\n"
         "*Survival*\n"
-        "/hunt â Hunt every 8 hours\n"
-        "/profile â View your stats\n"
-        "/inventory â Check your items\n\n"
+        "/hunt — Hunt every 8 hours\n"
+        "/profile — View your stats\n"
+        "/inventory — Check your items\n\n"
         "*Social*\n"
-        "/ambush @user â Strike from shadows (12h CD)\n"
-        "/protect â Shield yourself 5 hours (24h CD)\n"
-        "/revenge â Strike back after ambush\n"
-        "/gift @user item â Give an item\n\n"
+        "/ambush @user — Strike from shadows (12h CD)\n"
+        "/protect — Shield yourself 5 hours (24h CD)\n"
+        "/revenge — Strike back after ambush\n"
+        "/gift @user item — Give an item\n\n"
         "*Territory*\n"
-        "/join <faction> â Join a faction\n"
-        "/factions â Faction leaderboard\n\n"
+        "/join <faction> — Join a faction\n"
+        "/factions — Faction leaderboard\n\n"
         "*Stats*\n"
-        "/leaderboard â Top 10 crocos\n"
-        "/event â Check active world event\n\n"
+        "/leaderboard — Top 10 crocos\n"
+        "/event — Check active world event\n\n"
         f"CA: `{CA_ADDRESS}`"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
@@ -82,11 +82,11 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
             continue
         await send_sticker(context.bot, GROUP_ID, "hi")
         await update.message.reply_text(
-            f"ð {member.first_name} enters the swamp.\n\n"
+            f"🐊 {member.first_name} enters the swamp.\n\n"
             f"The reeds part. Eyes watch from the murk.\n"
             f"Start with /hunt to mark your territory.\n"
             f"Pick your side with /join <faction>.\n\n"
-            f"Welcome to the dark. ð¤",
+            f"Welcome to the dark. 🖤",
             parse_mode="Markdown"
         )
 
@@ -110,10 +110,10 @@ async def post_init(application: Application):
         BotCommand("help", "All commands"),
         BotCommand("admin", "Admin Terminal"),
     ])
-    logger.info("ð CrocoBot post init complete.")
+    logger.info("🐊 CrocoBot post init complete.")
 
 class HealthHandler(tornado.web.RequestHandler):
-    """GET /health â 200 OK â satisfies Render's health check on the same PORT."""
+    """GET /health → 200 OK — satisfies Render's health check on the same PORT."""
     def get(self):
         self.set_status(200)
         self.write("OK")
@@ -145,7 +145,7 @@ async def main_async():
     app.add_handler(CommandHandler("admin", admin))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member))
     
-    logger.info("ð Starting python-telegram-bot internal webhook lifecycle...")
+    logger.info("🐊 Starting python-telegram-bot internal webhook lifecycle...")
     
     # Initialize application components
     await app.initialize()
@@ -161,9 +161,9 @@ async def main_async():
     )
 
     # Register /health on the same Tornado server PTB started.
-    # Render's health check hits GET /health on PORT â this satisfies it.
+    # Render's health check hits GET /health on PORT — this satisfies it.
     app.updater.httpd.add_handlers(".*", [(r"/health", HealthHandler)])
-    logger.info("ð /health route registered on Tornado server.")
+    logger.info("🐊 /health route registered on Tornado server.")
 
     await app.start()
     
