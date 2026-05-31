@@ -42,8 +42,8 @@ async def ambush(update: Update, context: ContextTypes.DEFAULT_TYPE):
     attacker = update.effective_user
     is_admin = attacker.id in ADMIN_IDS
 
-    # Admins can trigger anywhere, regular users only in the group
-    if not is_admin and update.effective_chat.id != GROUP_ID:
+    # Group only — applies to all users including admins
+    if update.effective_chat.id != GROUP_ID:
         return
 
     ensure_user(attacker.id, attacker.username or attacker.first_name)
@@ -151,15 +151,8 @@ async def protect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     is_admin = user.id in ADMIN_IDS
 
-    if not is_admin and update.effective_chat.id != GROUP_ID:
+    if update.effective_chat.id != GROUP_ID:
         return
-
-    ensure_user(user.id, user.username or user.first_name)
-    now = datetime.now().timestamp()
-    target_chat_id = update.effective_chat.id
-
-    # Cooldown check (Admins bypass)
-    if not is_admin:
         cd = get_cooldown(user.id, "protect")
         if cd and now < cd:
             remaining = int(cd - now)
@@ -186,7 +179,7 @@ async def revenge(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     is_admin = user.id in ADMIN_IDS
 
-    if not is_admin and update.effective_chat.id != GROUP_ID:
+    if update.effective_chat.id != GROUP_ID:
         return
 
     ensure_user(user.id, user.username or user.first_name)
@@ -247,7 +240,7 @@ async def gift(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     is_admin = user.id in ADMIN_IDS
 
-    if not is_admin and update.effective_chat.id != GROUP_ID:
+    if update.effective_chat.id != GROUP_ID:
         return
 
     ensure_user(user.id, user.username or user.first_name)
@@ -315,7 +308,7 @@ async def join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     is_admin = user.id in ADMIN_IDS
 
-    if not is_admin and update.effective_chat.id != GROUP_ID:
+    if update.effective_chat.id != GROUP_ID:
         return
 
     ensure_user(user.id, user.username or user.first_name)
