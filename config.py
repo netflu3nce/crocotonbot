@@ -6,7 +6,7 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL", "https://your-render-url.onrender.com")
 PORT = int(os.getenv("PORT", 8080))
 
 # ── Community ─────────────────────────────────────────────────────────────────
-GROUP_ID = -5159074695
+GROUP_ID = -1003833863769
 GROUP_LINK = "https://t.me/Crocotoncommunity"
 CA_ADDRESS = "EQB-i1kqPz_MitkRCOzzgDf0_doxahk1bUPVAGjm49zMozOd"
 START_IMAGE = "https://i.ibb.co/35V7TDLW/IMG-9243.jpg"
@@ -169,3 +169,4 @@ HUNT_OUTCOMES = {
 CORRUPTION_GAIN_PER_HUNT = 0.5   # % per hunt above Predator rank
 CORRUPTION_COLLAPSE_THRESHOLD = 80
 CORRUPTION_COLLAPSE_CHANCE = 0.10  # 10% chance per hunt above 80%
+o
