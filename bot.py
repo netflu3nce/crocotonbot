@@ -4,7 +4,6 @@ import asyncio
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
-import tornado.web
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -94,7 +93,7 @@ async def post_init(application: Application):
     setup_scheduler(application.bot)
     if not scheduler.running:
         scheduler.start()
-        
+
     await application.bot.set_my_commands([
         BotCommand("hunt", "Hunt every 8 hours"),
         BotCommand("profile", "View your croco profile"),
@@ -112,22 +111,37 @@ async def post_init(application: Application):
     ])
     logger.info("🐊 CrocoBot post init complete.")
 
-class HealthHandler(tornado.web.RequestHandler):
-    """GET /health → 200 OK — satisfies Render's health check on the same PORT."""
-    def get(self):
-        self.set_status(200)
-        self.write("OK")
+async def health_server(port: int):
+    """
+    Minimal asyncio HTTP server on PORT+1.
+    Responds 200 OK to any GET — used by Render's healthCheckPath.
+    Runs concurrently alongside PTB's webhook server.
+    """
+    async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        try:
+            await reader.read(1024)  # consume the request
+        except Exception:
+            pass
+        response = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK"
+        writer.write(response)
+        await writer.drain()
+        writer.close()
+
+    server = await asyncio.start_server(handle, "0.0.0.0", port)
+    logger.info(f"🐊 Health server listening on port {port}")
+    async with server:
+        await server.serve_forever()
 
 async def main_async():
     init_db()
-    
+
     app = (
         Application.builder()
         .token(BOT_TOKEN)
         .post_init(post_init)
         .build()
     )
-    
+
     # Handlers Registration
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
@@ -144,14 +158,12 @@ async def main_async():
     app.add_handler(CommandHandler("event", check_event))
     app.add_handler(CommandHandler("admin", admin))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member))
-    
-    logger.info("🐊 Starting python-telegram-bot internal webhook lifecycle...")
-    
-    # Initialize application components
+
+    logger.info("🐊 Starting CrocoBot webhook + health server...")
+
     await app.initialize()
-    
-    # url_path must be non-empty so the root GET "/" is free for the health check.
-    # Render pings healthCheckPath=/health (GET), webhook receives POST at /webhook.
+
+    # PTB webhook on PORT — receives Telegram POSTs at /webhook
     await app.updater.start_webhook(
         listen="0.0.0.0",
         port=int(PORT),
@@ -159,19 +171,18 @@ async def main_async():
         webhook_url=f"{WEBHOOK_URL}/webhook",
         drop_pending_updates=True,
     )
-
-    # Register /health on the same Tornado server PTB started.
-    # Render's health check hits GET /health on PORT — this satisfies it.
-    app.updater.httpd.add_handlers(".*", [(r"/health", HealthHandler)])
-    logger.info("🐊 /health route registered on Tornado server.")
-
     await app.start()
-    
+    logger.info(f"🐊 Webhook live on port {PORT} at /webhook")
+
+    # Health server on PORT+1 — Render healthCheckPath hits this
+    health_port = int(PORT) + 1
+    health_task = asyncio.create_task(health_server(health_port))
+
     try:
-        while True:
-            await asyncio.sleep(3600)
+        await asyncio.Event().wait()  # run forever
     except (KeyboardInterrupt, SystemExit, asyncio.CancelledError):
         logger.info("Stopping bot engine subsystems gracefully...")
+        health_task.cancel()
         if scheduler.running:
             scheduler.shutdown()
         await app.stop()
